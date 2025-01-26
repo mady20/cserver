@@ -15,7 +15,8 @@ void error(char *msg){
 }
 
 int main(int argc, char **argv){
-    
+
+
     // declarations
     int sockfd, newsockfd, portno, clilen, n;
     char buffer[256];
@@ -32,6 +33,7 @@ int main(int argc, char **argv){
 
     // if the socket call fails it returns -1
     if(sockfd < 0){
+        close(sockfd);
         error("ERROR opening socket");
     }
 
@@ -41,7 +43,6 @@ int main(int argc, char **argv){
 
     // cli args are strings
     portno = atoi(argv[1]);
-
     // server address of which address family
     serv_addr.sin_family = AF_INET;
     // which port on server will be open
@@ -53,6 +54,7 @@ int main(int argc, char **argv){
     // bind the socket to the address struct of some sizez
     // 2nd args is defined to take a ptr to sockaddr struct, casting was needed
     if( bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
+        close(sockfd);
         error("ERROR on binding");
     }
     // start listen on the socket for connections
@@ -67,6 +69,8 @@ int main(int argc, char **argv){
     // creates a socket and return its fd
     newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
     if(newsockfd < 0){
+        close(newsockfd);
+        close(sockfd);
         error("ERROR on accept");
     }
 
@@ -77,6 +81,8 @@ int main(int argc, char **argv){
     // n is no of bytes read
     n = read(newsockfd, buffer, 255);
     if(n < 0){
+        close(newsockfd);
+        close(sockfd);
         error("ERROR reading from socket");
     }
     printf("Here is the message: %s\n", buffer);
@@ -87,9 +93,14 @@ int main(int argc, char **argv){
     // n is no of bytes written
     n = write(newsockfd, msg , sizeof(msg));
     if(n < 0){
+        close(newsockfd);
+        close(sockfd);
         error("ERROR writing to socket");
     }
-
     // program terminates after writing to socket
+    close(newsockfd);
+    close(sockfd);
+    
+
     return 0;
 }
