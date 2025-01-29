@@ -67,7 +67,7 @@ int main(int argc, char **argv){
 
     // block the exec until a client connects 
     // creates a socket and return its fd
-    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr,(socklen_t * restrict) &clilen);
     if(newsockfd < 0){
         close(newsockfd);
         close(sockfd);
