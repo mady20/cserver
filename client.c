@@ -4,9 +4,8 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <stdbool.h>
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 8080
 #define BUFFER_SIZE 1024
 
 // in case of error, print msg and terminate
@@ -15,16 +14,23 @@ void error(char *msg){
     exit(1);
 }
 
-int main(){
+int main(int argc, char **argv){
     int sockfd;
     struct sockaddr_in server_addr;
-    char buffer[BUFFER_SIZE] = "123";
+    char buffer[BUFFER_SIZE];
 
+    if(argc < 3){
+        error("USAGE ./client <ip> <port>\n");
+    }
+
+    char* SERVER_IP = argv[1];
+    int SERVER_PORT = atoi(argv[2]);
     // creating a socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0){
         error("ERROR opening socket");
     }
+    printf("client socket created successfully!\n");
 
     // configure the server address
     server_addr.sin_family = AF_INET;
@@ -37,12 +43,19 @@ int main(){
     if(connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1){
         error("Connection Failed");
     }
-
     printf("Connected to server.\n");
-    
-    // send data to the server 
-    send(sockfd, buffer, strlen(buffer), 0);
 
+    while(true){
+        bzero(buffer,BUFFER_SIZE);
+        scanf("%s", buffer);
+        if(strcmp(buffer, "end")){
+            break;
+        }
+        // send data to the server
+        send(sockfd, buffer, strlen(buffer), 0);
+    }
+
+    
     // receive response from server
     int bytes_received = recv(sockfd, buffer, BUFFER_SIZE, 0);
     
