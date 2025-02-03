@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #define BUFFER_SIZE 1024
+#define SERVER_IP "127.0.0.1"
 
 // in case of error, print msg and terminate
 void error(char *msg){
@@ -18,13 +19,11 @@ int main(int argc, char **argv){
     int sockfd;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE];
-
-    if(argc < 3){
-        error("USAGE ./client <ip> <port>\n");
+    
+    if(argc < 2){
+        error("USAGE ./client <port>\n");
     }
-
-    char* SERVER_IP = argv[1];
-    int SERVER_PORT = atoi(argv[2]);
+    int SERVER_PORT = atoi(argv[1]);
     // creating a socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0){
@@ -45,17 +44,21 @@ int main(int argc, char **argv){
     }
     printf("Connected to server.\n");
 
+
     while(true){
         bzero(buffer,BUFFER_SIZE);
         scanf("%s", buffer);
-        if(strcmp(buffer, "end")){
+        if(buffer[strlen(buffer) - 1] == '\n'){
+            buffer[strlen(buffer) - 1] = '\0';
+        } 
+        if(strcmp(buffer, "end") == 0){
+            send(sockfd, "end\n", 4, 0);
             break;
         }
         // send data to the server
         send(sockfd, buffer, strlen(buffer), 0);
     }
 
-    
     // receive response from server
     int bytes_received = recv(sockfd, buffer, BUFFER_SIZE, 0);
     

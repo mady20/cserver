@@ -1,86 +1,124 @@
+/**************************************************************************/
+/* server.c                                                               */
+/**************************************************************************/
+
+
+#include <errno.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <stdbool.h>
 
 #define BUFFER_SIZE 1024
 
 // in case of error, print msg and terminate
 void error(char *msg) {
-    perror(msg);
-    exit(1);
+  perror(msg);
+  exit(1);
 }
 
 int main(int argc, char **argv) {
-    int sockfd;
-    struct sockaddr_in server_addr;
-    char buffer[BUFFER_SIZE];
 
-    if (argc < 3) {
-        error("USAGE ./client <ip> <port>\n");
-    }
+  // declarations
+  int sockfd, newsockfd, portno, clilen, n;
+  char buffer[BUFFER_SIZE];
+  int totalBytesReceived = 0;
+  struct sockaddr_in serv_addr, cli_addr;
 
-    char *SERVER_IP = argv[1];
-    int SERVER_PORT = atoi(argv[2]);
+  // port is required
+  if (argc < 2) {
+    error("no port provided!\n");
+  }
+  // takes address domain, type of socket, protocol, returns a fd
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    // creating a socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        error("ERROR opening socket");
-    }
-    printf("Client socket created successfully!\n");
-
-    // configure the server address
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(SERVER_PORT);
-    if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
-        error("ERROR address not supported");
-    }
-
-    // connect to the server
-    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-        error("Connection Failed");
-    }
-    printf("Connected to server.\n");
-
-    while (true) {
-        bzero(buffer, BUFFER_SIZE);
-        printf("Enter message: ");
-        fgets(buffer, BUFFER_SIZE, stdin);
-
-        // Remove newline character from input
-        buffer[strcspn(buffer, "\n")] = '\0';
-
-        // Check if the user wants to end the session
-        if (strcmp(buffer, "end") == 0) {
-            break;
-        }
-
-        // Send data to the server using write
-        if (write(sockfd, buffer, strlen(buffer)) < 0) {
-            error("ERROR writing to socket");
-        }
-
-        // Receive response from the server using read
-        bzero(buffer, BUFFER_SIZE);
-        int bytes_received = read(sockfd, buffer, BUFFER_SIZE - 1);
-        if (bytes_received < 0) {
-            error("ERROR reading from socket");
-        } else if (bytes_received == 0) {
-            printf("Server disconnected.\n");
-            break;
-        }
-
-        buffer[bytes_received] = '\0'; // Null-terminate the received data
-        printf("Server response: %s\n", buffer);
-    }
-
-    // Close the socket
+  // if the socket call fails it returns -1
+  if (sockfd < 0) {
     close(sockfd);
-    printf("Connection closed.\n");
+    error("ERROR opening socket");
+  }
+  printf("server socket created successfully!\n");
+  // initialize the data to '\0' at n (2nd arg) bytes starting from char* (1st
+  // arg)
+  bzero((char *)&serv_addr, sizeof(serv_addr));
 
-    return 0;
+  // cli args are strings
+  portno = atoi(argv[1]);
+  // server address of which address family
+  serv_addr.sin_family = AF_INET;
+  // which port on server will be open
+  // unsigned short int to network byte order
+  serv_addr.sin_port = htons(portno);
+  // ip address of the machine
+  serv_addr.sin_addr.s_addr = INADDR_ANY;
+
+  // bind the socket to the address struct of some sizez
+  // 2nd args is defined to take a ptr to sockaddr struct, casting was needed
+  if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+    close(sockfd);
+    error("ERROR on binding");
+  }
+  printf("address bind successfull!\n");
+  // start listen on the socket for connections
+  // 2nd arg is backlog queue, i.e no of waiting connections while server is
+  // handling current 5 is max permited by most systems
+  listen(sockfd, 5);
+  printf("server started listening!\n");
+  // len of the client address
+  clilen = sizeof(cli_addr);
+
+  // block the exec until a client connects
+  // creates a socket and return its fd
+  newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr,
+                     (socklen_t *restrict)&clilen);
+  if (newsockfd < 0) {
+    close(newsockfd);
+    close(sockfd);
+    error("ERROR on accept");
+  }
+  printf("client socket created!\n");
+  // initiallize the buffer to zero
+  bzero(buffer, BUFFER_SIZE);
+    
+  while (true) {
+    // read x bytes from socket into the buffer
+    // n is no of bytes read
+    n = read(newsockfd, buffer, BUFFER_SIZE - 1);
+    if (n < 0) {
+      close(newsockfd);
+      close(sockfd);
+      error("ERROR reading from socket");
+    } else if (n == 0) {
+      // client disconnected
+      printf("Client disconnected\n");
+      break;
+    }
+    buffer[n] = '\0'; // Null-terminate the buffer
+    printf("Bytes: %i Content: %s\n", n, buffer);
+    totalBytesReceived += n;
+    // Check if the received message is "end"
+    if (strcmp(buffer, "end\n") == 0 || strcmp(buffer, "end") == 0) {
+      printf("Client Disconnected!\n");
+      break;
+    }
+  }
+
+  // Send the final response after the loop
+  char msg[256];
+  snprintf(msg, sizeof(msg) - 1, "Total Bytes Sent: %d", totalBytesReceived);  
+  n = write(newsockfd, msg, sizeof(msg));
+  if (n < 0) {
+    close(newsockfd);
+    close(sockfd);
+    error("ERROR writing to socket");
+  }
+  // program terminates after writing to socket
+  close(newsockfd);
+  close(sockfd);
+
+  return 0;
 }
