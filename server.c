@@ -25,7 +25,6 @@ void info(char *msg){
   printf("[Info]  %s\n", msg);
 }
 
-
 /*
  * Creates a stream socket
  * fd: File descriptor, on which will read from and write to
@@ -34,25 +33,24 @@ void info(char *msg){
 
 bool createSocket(int* fd){
   *fd = socket(AF_INET, SOCK_STREAM, 0);
-  if(*fd > 0) return true;
-  close(*fd);
-  return false;
+  if(*fd < 0) return false;
+  return true;
 } 
 
 bool bindSocket(int fd, struct sockaddr_in* address){
-  if(bind(fd, (struct sockaddr *) &address, sizeof(address)) > 0) return true;
+  if(bind(fd, (struct sockaddr *) address, sizeof(*address)) >= 0) return true;
   close(fd);
   return false;
 }
 
-bool acceptConnection(int* serverSocket, int* clientSocket, struct sockaddr_in* clientAddress, int addressLength){
-  *clientSocket = accept(*serverSocket, (struct sockaddr *) &clientAddress, (socklen_t *restrict) &addressLength);
+bool acceptConnection(int* serverSocket, int* clientSocket, struct sockaddr_in* clientAddress){
+  int addressLength = sizeof(*clientAddress);
+  *clientSocket = accept(*serverSocket, (struct sockaddr *)clientAddress, (socklen_t *restrict) &addressLength);
   if(*clientSocket > 0) return true;
   close(*serverSocket);
   close(*clientSocket);
   return false;
 }
-
 
 void prepareServerAddress(struct sockaddr_in* address, int port){
   address->sin_family = AF_INET;
@@ -60,12 +58,11 @@ void prepareServerAddress(struct sockaddr_in* address, int port){
   address->sin_addr.s_addr = INADDR_ANY;
 }
 
-
 int main(int argc, char **argv) {
 
   if (argc < 2) error("no port provided!\n");
 
-  int serverSocket, clientSocket, portno, clilen, n;
+  int serverSocket, clientSocket, portno, n;
   char buffer[BUFFER_SIZE];
   int totalBytesReceived = 0;
   struct sockaddr_in serverAddress, clientAddress;
@@ -92,40 +89,37 @@ int main(int argc, char **argv) {
   listen(serverSocket, 5);
   info("Server started listening!");
 
-  clilen = sizeof(clientAddress);
-
   while(true){
-    if(!acceptConnection(&serverSocket, &clientSocket, &clientAddress, clilen)) error("Unable to accept connections!");
+    if(!acceptConnection(&serverSocket, &clientSocket, &clientAddress)) error("Unable to accept connections!");
     info("Client socket created!");
     while(true){
       n = read(clientSocket, buffer, BUFFER_SIZE - 1);
+      
       if (n < 0) {
         close(clientSocket);
         close(serverSocket);
         error("ERROR reading from socket");
       } else if (n == 0) {
-        // client disconnected
-        printf("Client disconnected\n");
+        info("Client Disconnected!");
         break;
       }
-      buffer[n] = '\0'; // Null-terminate the buffer
+      buffer[n] = '\0';
       printf("Bytes: %i Content: %s\n", n, buffer);
       totalBytesReceived += n;
 
       if (strcmp(buffer, "end\n") == 0 || strcmp(buffer, "end") == 0) {
-        printf("Client Disconnected!\n");
+        info("Client Disconnected!");
         break;
       }
     }
     
-    // Send the final response after the loop
     char msg[256];
     snprintf(msg, sizeof(msg) - 1, "Total Bytes Sent: %d", totalBytesReceived);  
-    n = write(clientSocket, msg, sizeof(msg));
+    n = write(clientSocket, msg, strlen(msg));
     if (n < 0) {
       close(clientSocket);
       close(serverSocket);
-      error("ERROR writing to socket");
+      error("Unable to write to socket!");
     }
   }
 
