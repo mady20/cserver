@@ -9,64 +9,86 @@
 #define BUFFER_SIZE 1024
 #define SERVER_IP "127.0.0.1"
 
-// in case of error, print msg and terminate
 void error(char *msg){
-    perror(msg);
-    exit(1);
+  printf("[ERROR] %s\n", msg);
+  exit(1);
 }
 
+void info(char *msg){
+  printf("[Info]  %s\n", msg);
+}
+
+void prepareServerAddress(struct sockaddr_in* serverAddress, int port){
+  serverAddress->sin_family = AF_INET;
+  serverAddress->sin_port = htons(port); 
+  if(inet_pton(AF_INET, SERVER_IP, &serverAddress->sin_addr) <= 0) {
+    error("ERROR address not supported");
+  }
+}
+
+
+bool createSocket(int* fd){
+  *fd = socket(AF_INET, SOCK_STREAM, 0);
+  if(*fd < 0) return false;
+  return true;
+}
+
+
 int main(int argc, char **argv){
-    int sockfd;
-    struct sockaddr_in server_addr;
+    int clientSocket;
+    struct sockaddr_in serverAddress;
     char buffer[BUFFER_SIZE];
     
     if(argc < 2){
         error("USAGE ./client <port>\n");
     }
     int SERVER_PORT = atoi(argv[1]);
-    // creating a socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(sockfd < 0){
-        error("ERROR opening socket");
+    if(!createSocket(&clientSocket)){
+      error("Failed to open socket!");
     }
-    printf("client socket created successfully!\n");
+    info("Client socket created!");
 
-    // configure the server address
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(SERVER_PORT);
-    if(inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
-        error("ERROR address not supported");
-    }
+    prepareServerAddress(&serverAddress, SERVER_PORT);
 
-    // connect to the server
-    if(connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1){
+    if(connect(clientSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) == -1){
         error("Connection Failed");
     }
-    printf("Connected to server.\n");
-
-
-    while(true){
-        bzero(buffer,BUFFER_SIZE);
-        scanf("%s", buffer);
-        if(buffer[strlen(buffer) - 1] == '\n'){
-            buffer[strlen(buffer) - 1] = '\0';
-        } 
-        if(strcmp(buffer, "end") == 0){
-            send(sockfd, "end\n", 4, 0);
+    info("Connected to server!");
+    while (true) {
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
             break;
         }
-        // send data to the server
-        send(sockfd, buffer, strlen(buffer), 0);
-    }
+        size_t len = strlen(buffer);
+        if (len > 0 && buffer[len - 1] == '\n') {
+            buffer[len - 1] = '\0';
+            --len;
+        }
 
+        if (strcmp(buffer, "end") == 0) {
+            if (send(clientSocket, "end\n", 4, 0) < 0) {
+                perror("send");
+            }
+            break;
+        }
+
+        if (len == 0) {
+            continue;
+        }
+
+        ssize_t sent = send(clientSocket, buffer, len, 0);
+        if (sent < 0) {
+            perror("send");
+            break;
+        }
+    }
     // receive response from server
-    int bytes_received = recv(sockfd, buffer, BUFFER_SIZE, 0);
+    //int bytes_received = recv(sockfd, buffer, BUFFER_SIZE, 0);
     
-    if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';
-        printf("Server response: %s\n", buffer);
-    }
+    //if (bytes_received > 0) {
+    //    buffer[bytes_received] = '\0';
+    //    printf("Server response: %s\n", buffer);
+    //}
 
-    close(sockfd);
+    close(clientSocket);
     return 0;
 }
