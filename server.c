@@ -58,6 +58,25 @@ void prepareServerAddress(struct sockaddr_in* address, int port){
   address->sin_addr.s_addr = INADDR_ANY;
 }
 
+bool readBytes(int clientSocket, int serverSocket, char* buffer){
+  int bytesRead = read(clientSocket, buffer, BUFFER_SIZE - 1);
+  if (bytesRead == 0){
+    info("Client Disconnected!");
+    return false;
+  }else if(bytesRead < 0){
+    close(clientSocket);
+    close(serverSocket);
+    error("Failed to read from client socket!");
+  }
+  buffer[bytesRead] = '\0';
+  if (strcmp(buffer, "end\n") == 0 || strcmp(buffer, "end") == 0) {
+    info("Client Disconnected!");
+    return false;
+  }
+  printf("%d %s\n", bytesRead, buffer);
+  return true;
+}
+
 int main(int argc, char **argv) {
 
   if (argc < 2) error("no port provided!\n");
@@ -93,33 +112,7 @@ int main(int argc, char **argv) {
     if(!acceptConnection(&serverSocket, &clientSocket, &clientAddress)) error("Unable to accept connections!");
     info("Client socket created!");
     while(true){
-      n = read(clientSocket, buffer, BUFFER_SIZE - 1);
-      
-      if (n < 0) {
-        close(clientSocket);
-        close(serverSocket);
-        error("ERROR reading from socket");
-      } else if (n == 0) {
-        info("Client Disconnected!");
-        break;
-      }
-      buffer[n] = '\0';
-      printf("Bytes: %i Content: %s\n", n, buffer);
-      totalBytesReceived += n;
-
-      if (strcmp(buffer, "end\n") == 0 || strcmp(buffer, "end") == 0) {
-        info("Client Disconnected!");
-        break;
-      }
-    }
-    
-    char msg[256];
-    snprintf(msg, sizeof(msg) - 1, "Total Bytes Sent: %d", totalBytesReceived);  
-    n = write(clientSocket, msg, strlen(msg));
-    if (n < 0) {
-      close(clientSocket);
-      close(serverSocket);
-      error("Unable to write to socket!");
+      if(!readBytes(clientSocket, serverSocket, buffer)) break;
     }
   }
 
